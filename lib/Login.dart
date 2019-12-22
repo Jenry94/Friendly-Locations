@@ -14,13 +14,18 @@ class Login extends StatefulWidget {
 
 class _LoginState extends State<Login> {
   bool isLogin = true;
-  var loginController = new LoginController();
   String userName, email, password, passwordConfirm;
-  final formLoginKey = new GlobalKey<FormState>();
-  final formRegisterKey = new GlobalKey<FormState>();
+  GlobalKey<FormState> formLoginKey = new GlobalKey<FormState>();
+  GlobalKey<FormState> formRegisterKey = new GlobalKey<FormState>();
+  GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+  var loginController = new LoginController();
+  var passwordController = new TextEditingController();
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: scaffoldKey,
       backgroundColor: Colors.white,
       body: new Column(
         mainAxisSize: MainAxisSize.min,
@@ -115,7 +120,7 @@ class _LoginState extends State<Login> {
       child: new Container(
         width: MediaQuery.of(context).size.width,
         child: new Form(
-          key: formLoginKey,
+          key: formRegisterKey,
           child: new ListView(
             padding: EdgeInsets.all(0),
             children: <Widget>[
@@ -155,6 +160,12 @@ class _LoginState extends State<Login> {
               icon: new Icon(Icons.person),
               hintText: HINT_USERNAME
             ),
+            validator: (value) {
+              return loginController.validateUserName(value);
+            },
+            onSaved: (value){
+              userName = value;
+            },
           )
         )
       )
@@ -163,7 +174,7 @@ class _LoginState extends State<Login> {
 
   Widget emailInput(){
     return Padding(
-      padding: EdgeInsets.fromLTRB(30, 20, 30, 10),
+      padding: EdgeInsets.fromLTRB(30, 10, 30, 10),
         child: new Container(
           padding: EdgeInsets.only(left:20),
           decoration: new BoxDecoration(
@@ -211,12 +222,19 @@ class _LoginState extends State<Login> {
             color: Colors.white,
           ),
           child: new TextFormField(
+            controller: passwordController,
             obscureText: true,
             decoration: new InputDecoration(
               border: InputBorder.none,
               icon: new Icon(Icons.vpn_key),
               hintText: HINT_PASSWORD
             ),
+            validator: (value) {
+              return loginController.validatePassword(value);
+            },
+            onSaved: (value){
+              password = value;
+            },
           ),
         ),
     
@@ -246,7 +264,10 @@ class _LoginState extends State<Login> {
               border: InputBorder.none,
               icon: new Icon(Icons.vpn_key),
               hintText: HINT_CONFIRM_PASSWORD
-            )
+            ),
+            validator: (value) {
+              return loginController.validatePasswordConfirm(value, passwordController.text);
+            }
           )
         )
       )
@@ -279,9 +300,11 @@ class _LoginState extends State<Login> {
                 setState(() {
                   if (isLogin) {
                     isLogin = false;
+                    passwordController.clear();
                   }
                   else{
                     isLogin = true;
+                    passwordController.clear();
                   }
                 });
               },
@@ -329,12 +352,29 @@ class _LoginState extends State<Login> {
     );
   }
 
+  Widget dangerSnackBar(String message){ 
+    return SnackBar(
+      content: new Text(message,style: TextStyle(color: Colors.white),textAlign: TextAlign.center),
+    backgroundColor: Colors.red,
+    );
+  }
+
   void registerEmail()async{
-    var user = await loginController.registerEmail(userName, email, password);
-    if (user != null) {
-      if(!user.isEmailVerified){
-        showEmailVerificationMessage(true);
-      }    
+    if(formRegisterKey.currentState.validate()){
+      formRegisterKey.currentState.save();
+      var user = await loginController.registerEmail(userName, email, password);
+      if (user != null) {
+        if(!user.isEmailVerified){
+          showEmailVerificationMessage();
+          setState(() {
+            isLogin = true;
+            passwordController.clear();
+          });
+        }    
+      }
+      else{
+        scaffoldKey.currentState.showSnackBar(dangerSnackBar(ERROR_ALREADY_IN_USE_EMAIL));
+      }
     }
   }
 
@@ -344,11 +384,14 @@ class _LoginState extends State<Login> {
       var user = await loginController.signInEmail(email, password);
       if (user != null) {
         if(!user.isEmailVerified){
-          showEmailVerificationMessage(false);
+          showEmailVerificationMessage();
         }
         else{
           Navigator.pushReplacement(context,MaterialPageRoute(builder: (context) => new MyHomePage(user)));
         }
+      }
+      else{
+        scaffoldKey.currentState.showSnackBar(dangerSnackBar(ERROR_INALID_EMAIL_OR_PASSWORD));
       }
     }
   }
@@ -364,16 +407,18 @@ class _LoginState extends State<Login> {
   }
 
 
-  void showEmailVerificationMessage(bool isFromRegister){
+  void showEmailVerificationMessage(){
     showDialog(
       context: context,
       builder: (_) => NetworkGiffyDialog(
         image: FlareActor("assets/flare_anim/email.flr",animation: "play"),
         title: new Text("Atención", style: TextStyle(fontWeight: FontWeight.w600)),
         description: new Text(EMAIL_VERIFICATION_MESSAGE,  textAlign: TextAlign.justify),
+        buttonOkText: new Text("Verificar"),
         buttonOkColor: PRIMARY_COLOR,
         onOkButtonPressed: () {
           Navigator.of(context).pop();
+          loginController.redirectMailApp();
         },
 
        
